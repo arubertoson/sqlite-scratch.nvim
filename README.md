@@ -29,6 +29,8 @@ The useful SQLite loop is small:
 Full database clients optimize for administration. This plugin optimizes for that
 loop.
 
+[![sqlite-scratch.nvim demonstration](https://github.com/arubertoson/sqlite-scratch.nvim/releases/download/demo-assets/demo.gif)](https://github.com/arubertoson/sqlite-scratch.nvim/releases/download/demo-assets/demo.gif)
+
 ## Requirements
 
 - Neovim 0.11 or newer;
@@ -119,8 +121,10 @@ With Neovim, Mise, and Just installed:
 ```sh
 just setup
 just check
+just demo
 ```
 
 `just check` verifies formatting and runs the test suite in headless Neovim.
+`just demo` records `scripts/demo/demo.tape` to `docs/demo.gif` using VHS.
 
 Detailed product notes: [`docs/product.md`](docs/product.md).

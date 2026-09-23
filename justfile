@@ -27,3 +27,7 @@ test:
 # Run one test file.
 test-file file:
     @nvim --headless --noplugin -u tests/init.lua -c "lua MiniTest.run_file('{{file}}')"
+
+# Record the README demonstration GIF.
+demo:
+    @mise exec -- vhs scripts/demo/demo.tape
