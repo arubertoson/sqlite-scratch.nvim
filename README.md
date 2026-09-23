@@ -50,7 +50,12 @@ vim.pack.add({
 require("sqlite-scratch").setup()
 ```
 
-`setup()` registers the commands. There is currently no configuration surface.
+`setup()` registers the commands and enables the scratchpad's buffer-local
+mappings by default. Set `keymaps = false` to use your own bindings:
+
+```lua
+require("sqlite-scratch").setup({ keymaps = false })
+```
 
 ## Usage
 
@@ -60,13 +65,14 @@ Open a database:
 :SQLiteOpen path/to/database.db
 ```
 
-The scratchpad installs these query-buffer mappings:
+The scratchpad installs these buffer-local mappings (execution navigation works in
+both the query and result buffers; the remaining actions are query-buffer-only):
 
 | Mapping | Action |
 | --- | --- |
 | `<leader>rr` | Run the complete query buffer, or the visual selection in Visual mode |
 | `<leader>rl` | Run the current line |
-| `[r` / `]r` | Move through execution history |
+| `[r` / `]r` | Previous / next execution record (query and result buffers) |
 | `<leader>rs` | Toggle the exact SQL for the selected execution |
 | `<leader>rd` | Delete the selected execution record |
 
@@ -77,6 +83,10 @@ Commands:
 | `:SQLiteOpen {path}` | Open or replace the active scratchpad |
 | `:SQLiteExport[!] {path}` | Rerun the selected SQL and stream complete CSV output to a file |
 | `:SQLiteClose` | Stop active work and close the scratchpad |
+
+The plugin installs no global mappings. For navigation while another buffer is
+focused, map `require("sqlite-scratch").navigate(delta)` explicitly; use
+`require("sqlite-scratch").is_visible()` to check whether the scratchpad tab is current.
 
 Opening another target asks before discarding a non-empty draft. Closing the owned
 tab or either owned window performs the same cleanup as `:SQLiteClose`.

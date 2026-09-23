@@ -5,6 +5,7 @@ local T = MiniTest.new_set({
     hooks = {
         pre_case = function()
             require("sqlite-scratch.session").close()
+            require("sqlite-scratch").setup({ keymaps = true })
             vim.cmd("silent! %bwipeout!")
         end,
         post_case = function()
@@ -193,6 +194,21 @@ end
 
 T["session"] = MiniTest.new_set()
 
+T["session"]["default scratchpad mappings can be disabled"] = function()
+    require("sqlite-scratch").setup({ keymaps = false })
+    local session = require("sqlite-scratch.session")
+    session.open(vim.fn.tempname() .. ".db")
+    local active = session.current()
+    for _, buf in ipairs({ active.query_buf, active.result_buf }) do
+        for _, mapping in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+            MiniTest.expect.equality(mapping.lhs ~= "[r" and mapping.lhs ~= "]r", true)
+        end
+    end
+    for _, mapping in ipairs(vim.api.nvim_buf_get_keymap(active.query_buf, "n")) do
+        MiniTest.expect.equality(mapping.desc ~= "Execute SQLite buffer", true)
+    end
+end
+
 T["session"]["executes asynchronously without moving query focus"] = function()
     local db_path = vim.fn.tempname() .. ".db"
     local session = require("sqlite-scratch.session")
@@ -201,6 +217,11 @@ T["session"]["executes asynchronously without moving query focus"] = function()
     local query_buf = session.open(db_path)
     local active = session.current()
     local scratchpad_tab = active.ui.tabpage
+    MiniTest.expect.equality(require("sqlite-scratch").is_visible(), true)
+    vim.cmd("tabnew")
+    MiniTest.expect.equality(require("sqlite-scratch").is_visible(), false)
+    vim.cmd("tabclose")
+    MiniTest.expect.equality(require("sqlite-scratch").is_visible(), true)
     local lsp_client = vim.lsp.get_client_by_id(active.lsp_client_id)
 
     MiniTest.expect.equality(lsp_client ~= nil, true)
@@ -283,6 +304,22 @@ T["session"]["executes asynchronously without moving query focus"] = function()
             ~= nil,
         true
     )
+
+    local function press(lhs)
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(lhs, true, false, true), "xt", false)
+    end
+    for _, win in ipairs({ active.query_win, active.result_win }) do
+        vim.api.nvim_set_current_win(win)
+        press("[r")
+        MiniTest.expect.equality(active.history.index, 1)
+        press("]r")
+        MiniTest.expect.equality(active.history.index, 2)
+        MiniTest.expect.equality(vim.api.nvim_get_current_win(), win)
+        for _, mapping in ipairs(vim.api.nvim_buf_get_keymap(vim.api.nvim_win_get_buf(win), "n")) do
+            MiniTest.expect.equality(mapping.lhs ~= "<M-h>" and mapping.lhs ~= "<M-l>", true)
+        end
+    end
+    vim.api.nvim_set_current_win(active.query_win)
 
     local export_path = vim.fn.tempname() .. ".csv"
     session.export(export_path, false)
@@ -423,6 +460,10 @@ T["session"]["editing a file in the query window keeps the scratchpad active"] =
 
     session.close()
     MiniTest.expect.equality(vim.api.nvim_buf_is_valid(file_buf), true)
+    MiniTest.expect.equality(vim.b[file_buf].sqlite_scratch_query, nil)
+    for _, mapping in ipairs(vim.api.nvim_buf_get_keymap(file_buf, "n")) do
+        MiniTest.expect.equality(mapping.lhs ~= "[r" and mapping.lhs ~= "]r", true)
+    end
     os.remove(sql_path)
 end
 

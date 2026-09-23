@@ -36,7 +36,27 @@ local function open(path)
     session.open(db_path)
 end
 
-function M.setup()
+---@return boolean
+function M.is_visible() return session.is_visible() end
+
+---@param delta integer
+function M.navigate(delta) session.navigate(delta) end
+
+---@param opts? { keymaps?: boolean }
+function M.setup(opts)
+    if opts ~= nil then
+        if type(opts) ~= "table" then error("SQLite scratchpad options must be a table") end
+        for key in pairs(opts) do
+            if key ~= "keymaps" then
+                error("Unknown SQLite scratchpad option: " .. tostring(key))
+            end
+        end
+        if opts.keymaps ~= nil and type(opts.keymaps) ~= "boolean" then
+            error("SQLite scratchpad keymaps must be a boolean")
+        end
+    end
+    session.configure_keymaps(opts == nil or opts.keymaps ~= false)
+
     vim.api.nvim_create_user_command("SQLiteOpen", function(command) open(command.args) end, {
         nargs = 1,
         complete = "file",

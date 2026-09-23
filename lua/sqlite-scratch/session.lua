@@ -29,6 +29,46 @@ local M = {}
 
 ---@type SqliteScratch.State
 local state = { kind = "inactive" }
+local keymaps_enabled = true
+
+---@param buf integer
+local function configure_result_navigation(buf)
+    for _, mapping in ipairs({
+        { lhs = "[r", delta = -1, desc = "Previous SQLite result" },
+        { lhs = "]r", delta = 1, desc = "Next SQLite result" },
+    }) do
+        vim.keymap.set("n", mapping.lhs, function() M.navigate(mapping.delta) end, {
+            buffer = buf,
+            silent = true,
+            desc = mapping.desc,
+        })
+    end
+end
+
+local query_map_descriptions = {
+    ["Execute SQLite buffer"] = true,
+    ["Execute SQLite selection"] = true,
+    ["Execute SQLite line"] = true,
+    ["Previous SQLite result"] = true,
+    ["Next SQLite result"] = true,
+    ["Delete current SQLite result"] = true,
+    ["Toggle SQLite execution SQL"] = true,
+}
+
+---@param buf integer
+local function clear_query_buffer(buf)
+    if not vim.api.nvim_buf_is_valid(buf) then return end
+    if keymaps_enabled then
+        for _, mode in ipairs({ "n", "x" }) do
+            for _, mapping in ipairs(vim.api.nvim_buf_get_keymap(buf, mode)) do
+                if query_map_descriptions[mapping.desc] then
+                    vim.api.nvim_buf_del_keymap(buf, mode, mapping.lhs)
+                end
+            end
+        end
+    end
+    vim.b[buf].sqlite_scratch_query = nil
+end
 
 ---@param query_buf integer
 local function configure_query_buffer(query_buf)
@@ -50,18 +90,7 @@ local function configure_query_buffer(query_buf)
         local line = vim.api.nvim_win_get_cursor(0)[1]
         M.execute(scope.line(query_buf, line))
     end, vim.tbl_extend("force", options, { desc = "Execute SQLite line" }))
-    vim.keymap.set(
-        "n",
-        "[r",
-        function() M.navigate(-1) end,
-        vim.tbl_extend("force", options, { desc = "Previous SQLite result" })
-    )
-    vim.keymap.set(
-        "n",
-        "]r",
-        function() M.navigate(1) end,
-        vim.tbl_extend("force", options, { desc = "Next SQLite result" })
-    )
+    configure_result_navigation(query_buf)
     vim.keymap.set(
         "n",
         "<leader>rd",
@@ -102,9 +131,10 @@ function M.open(db_path)
         if state.kind == "active" and state.ui == scratch_ui then M.close() end
     end, function(query_buf)
         if state.kind ~= "active" or state.ui ~= scratch_ui then return end
+        if state.query_buf ~= query_buf then clear_query_buffer(state.query_buf) end
         state.query_buf = query_buf
         vim.lsp.buf_attach_client(query_buf, state.lsp_client_id)
-        configure_query_buffer(query_buf)
+        if keymaps_enabled then configure_query_buffer(query_buf) end
     end)
     local lsp_client_id = vim.lsp.start(db_adapter:lsp_config(), {
         bufnr = scratch_ui.query_buf,
@@ -128,7 +158,10 @@ function M.open(db_path)
         lsp_client_id = lsp_client_id,
         process = nil,
     }
-    configure_query_buffer(state.query_buf)
+    if keymaps_enabled then
+        configure_query_buffer(state.query_buf)
+        configure_result_navigation(state.result_buf)
+    end
     render_current(state)
     return state.query_buf
 end
@@ -139,6 +172,7 @@ function M.close()
     local active = state
     state = { kind = "inactive" }
     if active.process then pcall(active.process.kill, active.process, 15) end
+    clear_query_buffer(active.query_buf)
     local client = vim.lsp.get_client_by_id(active.lsp_client_id)
     if client then client:stop(true) end
     ui.close(active.ui)
@@ -228,7 +262,25 @@ function M.toggle_sql_preview()
 end
 
 ---@return boolean
+---@param enabled boolean
+function M.configure_keymaps(enabled)
+    if state.kind == "active" and keymaps_enabled ~= enabled then
+        error("Configure SQLite scratchpad keymaps before opening a database")
+    end
+    keymaps_enabled = enabled
+end
+
 function M.is_active() return state.kind == "active" end
+
+function M.is_visible()
+    if state.kind == "inactive" then return false end
+    local active = state
+    return vim.api.nvim_tabpage_is_valid(active.ui.tabpage)
+        and active.ui.tabpage == vim.api.nvim_get_current_tabpage()
+        and vim.api.nvim_win_is_valid(active.query_win)
+        and vim.api.nvim_win_is_valid(active.result_win)
+        and vim.api.nvim_win_get_buf(active.result_win) == active.result_buf
+end
 
 ---@return SqliteScratch.ActiveState|nil
 function M.current()
