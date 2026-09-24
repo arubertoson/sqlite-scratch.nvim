@@ -72,6 +72,7 @@ function M.open(db_path, on_lost, on_query_changed)
     vim.b[query_buf].sqlite_scratch_query = true
     vim.bo[query_buf].filetype = "sql"
     vim.bo[query_buf].modifiable = true
+    vim.wo[query_win].wrap = false
 
     local result_buf = vim.api.nvim_create_buf(false, true)
     vim.bo[result_buf].buftype = "nofile"
